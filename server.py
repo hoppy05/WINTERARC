@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
-#from emergentintegrations.llm.chat import LlmChat, UserMessage
+# from emergentintegrations.llm.chat import LlmChat, UserMessage
 import asyncio
 import httpx
 
@@ -171,7 +171,7 @@ async def get_ai_response(user_id: str, message: str, context: str = "") -> str:
         session_id = f"winter_arc_{user_id}"
         
         # Initialize chat
-        #chat = LlmChat(
+        # chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=session_id,
             system_message=WINTER_COACH_PROMPT + f"\n\nAdditional context: {context}"
