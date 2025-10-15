@@ -178,10 +178,10 @@ async def get_ai_response(user_id: str, message: str, context: str = "") -> str:
         ).with_model("openai", "gpt-4o")
         
         # Create user message
-        #user_message = UserMessage(text=message)
+        # user_message = UserMessage(text=message)
         
         # Get response
-      #  response = await chat.send_message(user_message)
+      # response = await chat.send_message(user_message)
         return response
     except Exception as e:
         logging.error(f"AI response error: {e}")
