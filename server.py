@@ -171,17 +171,17 @@ async def get_ai_response(user_id: str, message: str, context: str = "") -> str:
         session_id = f"winter_arc_{user_id}"
         
         # Initialize chat
-        chat = LlmChat(
+        #chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=session_id,
             system_message=WINTER_COACH_PROMPT + f"\n\nAdditional context: {context}"
         ).with_model("openai", "gpt-4o")
         
         # Create user message
-        user_message = UserMessage(text=message)
+        #user_message = UserMessage(text=message)
         
         # Get response
-        response = await chat.send_message(user_message)
+      #  response = await chat.send_message(user_message)
         return response
     except Exception as e:
         logging.error(f"AI response error: {e}")
