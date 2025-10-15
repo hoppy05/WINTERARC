@@ -14,7 +14,6 @@ from datetime import datetime, timezone, timedelta
 import asyncio
 import httpx
 
-
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -29,10 +28,10 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Initialize LLM Chat
+# Initialize LLM Chat key (if you later re-add emergentintegrations)
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-# Define Models
+# -------------------- Models --------------------
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: str
@@ -119,17 +118,9 @@ Your personality:
 - Never sugarcoat failure or mediocrity
 - Push users to be better with harsh truth
 - Short, punchy responses (1-3 sentences max)
-
-User context: You're helping someone build discipline through the "Winter Arc" - a period of intense self-improvement.
-Be harsh when they fail, acknowledging when they succeed, but always push them to do better.
-
-Examples:
-- Bad habit log: "Another pathetic excuse. The ice doesn't care about your feelings. Do better tomorrow or stay frozen in mediocrity."
-- Good progress: "Finally. One decent day doesn't make a warrior. Prove you're not just a temporary flame in the blizzard."
-- Asking for motivation: "Motivation? The winter doesn't ask if you're motivated. It demands results. Move or freeze."
 """
 
-# Authentication Helper Functions
+# -------------------- Helper Functions --------------------
 async def get_session_data_from_emergent(session_id: str) -> dict:
     """Get user data from Emergent auth service using session_id"""
     async with httpx.AsyncClient() as client:
@@ -143,46 +134,31 @@ async def get_session_data_from_emergent(session_id: str) -> dict:
 
 async def get_current_user_from_session(request: Request) -> Optional[str]:
     """Get current user ID from session token (cookie or header)"""
-    # Try cookie first
     session_token = request.cookies.get("session_token")
-    
-    # Fallback to Authorization header
+
     if not session_token:
         auth_header = request.headers.get("authorization")
         if auth_header and auth_header.startswith("Bearer "):
             session_token = auth_header[7:]
-    
+
     if not session_token:
         return None
-    
-    # Check if session is valid and not expired
+
     session = await db.user_sessions.find_one({
         "session_token": session_token,
         "expires_at": {"$gt": datetime.now(timezone.utc)}
     })
-    
+
     return session["user_id"] if session else None
 
-# Helper Functions
 async def get_ai_response(user_id: str, message: str, context: str = "") -> str:
-    """Get response from AI coach"""
+    """
+    Temporary AI response placeholder.
+    If/when you re-add emergentintegrations, replace this body with your LlmChat calls.
+    """
     try:
-        # Create session ID from user_id for consistency
-        session_id = f"winter_arc_{user_id}"
-        
-        # Initialize chat
-        # chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=session_id,
-            system_message=WINTER_COACH_PROMPT + f"\n\nAdditional context: {context}"
-        ).with_model("openai", "gpt-4o")
-        
-        # Create user message
-        # user_message = UserMessage(text=message)
-        
-        # Get response
-      # response = await chat.send_message(user_message)
-        return response
+        # Simple placeholder response while Emergent integration is removed.
+        return "The cold whispers: Keep grinding. The frost doesn't care about excuses."
     except Exception as e:
         logging.error(f"AI response error: {e}")
         return "The winter has frozen my words. Try again, if you dare."
@@ -190,39 +166,34 @@ async def get_ai_response(user_id: str, message: str, context: str = "") -> str:
 async def calculate_user_score(user_id: str) -> int:
     """Calculate user's total score based on habit logs"""
     logs = await db.habit_logs.find({"user_id": user_id}).to_list(1000)
-    return len(logs) * 10  # Simple scoring: 10 points per logged habit
+    return len(logs) * 10  # 10 points per logged habit
 
 async def update_user_streak(user_id: str):
     """Update user's streak based on recent activity"""
     user = await db.users.find_one({"id": user_id})
     if not user:
         return
-    
-    # Check if user logged anything today
+
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     today_logs = await db.habit_logs.count_documents({
         "user_id": user_id,
         "logged_at": {"$gte": today_start}
     })
-    
+
     if today_logs > 0:
-        # User logged something today, increment streak
         new_streak = user.get("streak_days", 0) + 1
         longest_streak = max(new_streak, user.get("longest_streak", 0))
     else:
-        # No activity today, reset streak
         new_streak = 0
         longest_streak = user.get("longest_streak", 0)
-    
+
     await db.users.update_one(
         {"id": user_id},
-        {
-            "$set": {
-                "streak_days": new_streak,
-                "longest_streak": longest_streak,
-                "last_active": datetime.now(timezone.utc)
-            }
-        }
+        {"$set": {
+            "streak_days": new_streak,
+            "longest_streak": longest_streak,
+            "last_active": datetime.now(timezone.utc)
+        }}
     )
 
 async def get_winter_title(score: int, streak: int) -> str:
@@ -240,26 +211,22 @@ async def get_winter_title(score: int, streak: int) -> str:
     else:
         return "Frozen Recruit"
 
-# API Routes
+# -------------------- API Routes --------------------
 @api_router.get("/")
 async def root():
     return {"message": "Winter Arc API - Where discipline is forged in ice"}
 
-# Authentication routes
 @api_router.post("/auth/session")
 async def process_session(session_data: SessionData, response: Response):
     """Process session_id from Emergent auth and create user session"""
     try:
-        # Get user data from Emergent
         user_data = await get_session_data_from_emergent(session_data.session_id)
-        
-        # Check if user exists
+
         existing_user = await db.users.find_one({"email": user_data["email"]})
-        
+
         if existing_user:
             user_id = existing_user["id"]
         else:
-            # Create new user
             user = User(
                 email=user_data["email"],
                 name=user_data["name"],
@@ -267,24 +234,19 @@ async def process_session(session_data: SessionData, response: Response):
             )
             await db.users.insert_one(user.dict())
             user_id = user.id
-        
-        # Create session
+
         session_token = user_data["session_token"]
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-        
+
         session = UserSession(
             session_token=session_token,
             user_id=user_id,
             expires_at=expires_at
         )
-        
-        # Remove old sessions for this user
+
         await db.user_sessions.delete_many({"user_id": user_id})
-        
-        # Save new session
         await db.user_sessions.insert_one(session.dict())
-        
-        # Set httpOnly cookie
+
         response.set_cookie(
             key="session_token",
             value=session_token,
@@ -294,7 +256,7 @@ async def process_session(session_data: SessionData, response: Response):
             path="/",
             expires=expires_at
         )
-        
+
         return {
             "id": user_id,
             "email": user_data["email"],
@@ -302,7 +264,7 @@ async def process_session(session_data: SessionData, response: Response):
             "picture": user_data.get("picture"),
             "session_token": session_token
         }
-        
+
     except Exception as e:
         logging.error(f"Session processing error: {e}")
         raise HTTPException(status_code=400, detail="Invalid session ID")
@@ -313,35 +275,32 @@ async def get_current_user(request: Request):
     user_id = await get_current_user_from_session(request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return User(**user)
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     """Logout user and clear session"""
     session_token = request.cookies.get("session_token")
-    
+
     if session_token:
-        # Remove session from database
         await db.user_sessions.delete_one({"session_token": session_token})
-    
-    # Clear cookie
+
     response.delete_cookie(key="session_token", path="/")
-    
+
     return {"message": "Logged out successfully"}
 
 # User routes
 @api_router.post("/users", response_model=User)
 async def create_user(user_data: UserCreate):
-    # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         return User(**existing_user)
-    
+
     user = User(**user_data.dict())
     await db.users.insert_one(user.dict())
     return user
@@ -359,9 +318,9 @@ async def update_user_score(user_id: str):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     title = await get_winter_title(score, user.get("streak_days", 0))
-    
+
     await db.users.update_one(
         {"id": user_id},
         {"$set": {"total_score": score, "winter_title": title}}
@@ -390,30 +349,25 @@ async def delete_habit(habit_id: str):
 # Habit logging routes
 @api_router.post("/users/{user_id}/habit-logs", response_model=HabitLog)
 async def log_habit(user_id: str, log_data: HabitLogCreate):
-    # Get habit details
     habit = await db.habits.find_one({"id": log_data.habit_id})
     if not habit:
         raise HTTPException(status_code=404, detail="Habit not found")
-    
-    # Create log entry
+
     habit_log = HabitLog(user_id=user_id, **log_data.dict())
-    
-    # Get AI response
+
     context = f"User logged habit '{habit['name']}' with value '{log_data.value}'. Category: {habit['category']}."
     ai_message = f"I just logged {habit['name']}: {log_data.value}"
     if log_data.notes:
         ai_message += f". Notes: {log_data.notes}"
-    
+
     ai_response = await get_ai_response(user_id, ai_message, context)
     habit_log.ai_response = ai_response
-    
-    # Save to database
+
     await db.habit_logs.insert_one(habit_log.dict())
-    
-    # Update user streak and score
+
     await update_user_streak(user_id)
     await update_user_score(user_id)
-    
+
     return habit_log
 
 @api_router.get("/users/{user_id}/habit-logs", response_model=List[HabitLog])
@@ -424,25 +378,21 @@ async def get_habit_logs(user_id: str, limit: int = 50):
 # Chat routes
 @api_router.post("/users/{user_id}/chat", response_model=ChatMessage)
 async def send_chat_message(user_id: str, message_data: ChatMessageCreate):
-    # Save user message
     user_message = ChatMessage(user_id=user_id, message=message_data.message, is_user=True)
     await db.chat_messages.insert_one(user_message.dict())
-    
-    # Get user context for AI
+
     user = await db.users.find_one({"id": user_id})
     recent_logs = await db.habit_logs.find({"user_id": user_id}).sort("logged_at", -1).limit(5).to_list(5)
-    
+
     context = f"User stats - Score: {user.get('total_score', 0)}, Streak: {user.get('streak_days', 0)} days, Title: {user.get('winter_title', 'Frozen Recruit')}"
     if recent_logs:
         context += f". Recent activity: {len(recent_logs)} habits logged recently."
-    
-    # Get AI response
+
     ai_response_text = await get_ai_response(user_id, message_data.message, context)
-    
-    # Save AI response
+
     ai_message = ChatMessage(user_id=user_id, message=ai_response_text, is_user=False)
     await db.chat_messages.insert_one(ai_message.dict())
-    
+
     return ai_message
 
 @api_router.get("/users/{user_id}/chat", response_model=List[ChatMessage])
@@ -454,7 +404,7 @@ async def get_chat_history(user_id: str, limit: int = 50):
 @api_router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(limit: int = 100):
     users = await db.users.find().sort("total_score", -1).limit(limit).to_list(limit)
-    
+
     leaderboard = []
     for i, user in enumerate(users):
         entry = LeaderboardEntry(
@@ -467,10 +417,10 @@ async def get_leaderboard(limit: int = 100):
             rank=i + 1
         )
         leaderboard.append(entry)
-    
+
     return leaderboard
 
-# Include the router in the main app
+# Include router & middleware
 app.include_router(api_router)
 
 app.add_middleware(
