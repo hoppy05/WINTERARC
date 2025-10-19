@@ -24,6 +24,9 @@ db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI()
+@app.get("/")
+def read_root():
+    return {"message": "Winter Arc API - Where discipline is forged in ice"}
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
